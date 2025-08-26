@@ -1,14 +1,28 @@
+// const { GoogleGenAI } = require("@google/genai");
+// const {
+//   conceptExplainPrompt,
+//   questionAnswerPrompt,
+// } = require("../utils/prompts");
+
+// const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 const { GoogleGenAI } = require("@google/genai");
-const {
-  conceptExplainPrompt,
-  questionAnswerPrompt,
-} = require("../utils/prompts");
+const { conceptExplainPrompt, questionAnswerPrompt } = require("../utils/prompts");
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
-@desc    Generate interview questions and answers using Gemini
-@route   POST /api/ai/generate-questions
-@access  Private
+// ADD THIS - will make responses faster
+const modelConfig = {
+  model: "gemini-2.0-flash-lite",
+  generationConfig: {
+    maxOutputTokens: 1500,  // Reduce from default 4096
+    temperature: 0.7,
+    responseMimeType: "application/json"  // Forces JSON format
+  }
+};
+
+// @desc    Generate interview questions and answers using Gemini
+// @route   POST /api/ai/generate-questions
+// @access  Private
 const generateInterviewQuestions = async (req, res) => {
   try {
     const { role, experience, topicsToFocus, numberOfQuestions } = req.body;
