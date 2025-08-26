@@ -15,7 +15,7 @@ const modelConfig = {
   model: "gemini-2.0-flash-lite",
   generationConfig: {
     maxOutputTokens: 1500,  // Reduce from default 4096
-    temperature: 0.7,
+    temperature: 0.3,
     //responseMimeType: "application/json"  // Forces JSON format
   }
 };
