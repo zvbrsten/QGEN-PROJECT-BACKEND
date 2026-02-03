@@ -1,35 +1,23 @@
-const { GoogleGenAI } = require("@google/genai");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 const {
-  conceptExplainPrompt,
   questionAnswerPrompt,
+  conceptExplainPrompt,
 } = require("../utils/prompts");
 
+// 🔐 Debug: check API key presence
 if (!process.env.GEMINI_API_KEY) {
-  console.error("❌ GEMINI_API_KEY is missing");
+  console.error("❌ GEMINI_API_KEY is missing in .env");
 }
 
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
+const model = genAI.getGenerativeModel({
+  model: "gemini-1.5-flash",
 });
 
-const MODEL_NAME = "gemini-1.5-flash"; // STABLE + SAFE
-
-/* -------------------------------------------------- */
-/* Helper: Extract text safely from Gemini response   */
-/* -------------------------------------------------- */
-function extractText(response) {
-  try {
-    return response.candidates?.[0]?.content?.parts
-      ?.map((p) => p.text)
-      .join("") || "";
-  } catch {
-    return "";
-  }
-}
-
-/* -------------------------------------------------- */
-/* Generate Interview Questions                       */
-/* -------------------------------------------------- */
+/**
+ * Generate interview questions + answers
+ */
 const generateInterviewQuestions = async (req, res) => {
   try {
     const { role, experience, topicsToFocus, numberOfQuestions } = req.body;
@@ -45,76 +33,46 @@ const generateInterviewQuestions = async (req, res) => {
       numberOfQuestions
     );
 
-    console.log("🤖 Generating interview questions...");
+    const result = await model.generateContent(prompt);
+    const text = result.response.text();
 
-    const response = await ai.models.generateContent({
-      model: MODEL_NAME,
-      contents: prompt,
-    });
+    // Debug log
+    console.log("✅ Gemini raw response:", text);
 
-    const text = extractText(response);
-
-    if (!text) {
-      throw new Error("Empty response from Gemini");
-    }
-
-    // Try JSON parse, fallback to raw text
-    let parsed;
-    try {
-      parsed = JSON.parse(text);
-    } catch {
-      console.warn("⚠️ Gemini response was not valid JSON, returning text");
-      parsed = { result: text };
-    }
+    const parsed = JSON.parse(text);
 
     res.status(200).json(parsed);
   } catch (error) {
-    console.error("🔥 AI Questions Error:", error);
-
-    res.status(500).json({
-      message: "Failed to generate questions",
-      error: error.message,
-    });
+    console.error("❌ Gemini Question Error:", error.message);
+    res.status(500).json({ message: "Failed to generate questions" });
   }
 };
 
-/* -------------------------------------------------- */
-/* Generate Concept Explanation                       */
-/* -------------------------------------------------- */
+/**
+ * Generate concept explanation
+ */
 const generateConceptExplanation = async (req, res) => {
   try {
     const { question } = req.body;
 
     if (!question) {
-      return res.status(400).json({ message: "Missing required fields" });
+      return res.status(400).json({ message: "Question is required" });
     }
-
-    console.log("🤖 Generating concept explanation...");
 
     const prompt = conceptExplainPrompt(question);
 
-    const response = await ai.models.generateContent({
-      model: MODEL_NAME,
-      contents: prompt,
-    });
+    const result = await model.generateContent(prompt);
+    const text = result.response.text();
 
-    const text = extractText(response);
+    // Debug log
+    console.log("✅ Gemini explanation raw:", text);
 
-    if (!text) {
-      throw new Error("Empty response from Gemini");
-    }
+    const parsed = JSON.parse(text);
 
-    // 🔥 DO NOT JSON.parse explanations
-    res.status(200).json({
-      explanation: text,
-    });
+    res.status(200).json(parsed);
   } catch (error) {
-    console.error("🔥 AI Explanation Error:", error);
-
-    res.status(500).json({
-      message: "Failed to generate explanation",
-      error: error.message,
-    });
+    console.error("❌ Gemini Explanation Error:", error.message);
+    res.status(500).json({ message: "Failed to generate explanation" });
   }
 };
 
