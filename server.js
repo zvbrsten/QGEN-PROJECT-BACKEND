@@ -4,6 +4,29 @@ const cors = require("cors");
 const path = require("path");
 const connectDB = require("./config/db");
 
+const cors = require("cors");
+
+const corsOptions = {
+  origin: "https://qgen-project.vercel.app", // your frontend origin (or use '*' if acceptable)
+  methods: ["GET","POST","PUT","DELETE","OPTIONS"],
+  allowedHeaders: ["Content-Type","Authorization"],
+  credentials: true,
+};
+
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions)); // ensure preflight handled
+
+// fallback: respond to OPTIONS immediately
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", corsOptions.origin);
+  res.header("Access-Control-Allow-Headers", corsOptions.allowedHeaders.join(", "));
+  if (req.method === "OPTIONS") {
+    res.header("Access-Control-Allow-Methods", corsOptions.methods.join(", "));
+    return res.status(200).end();
+  }
+  next();
+});
+
 const authRoutes = require('./routes/authRoutes')
 const sessionRoutes = require('./routes/sessionRoutes')
 const questionRoutes = require('./routes/questionRoutes');
