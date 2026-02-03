@@ -1,68 +1,117 @@
+/**
+ * server.js
+ * Vercel-compatible Express server with MongoDB + debugging
+ */
+
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
+
+// ---- Debug: Startup ----
+console.log("🚀 Starting server initialization...");
+
 const connectDB = require("./config/db");
 
-
-
-const authRoutes = require('./routes/authRoutes')
-const sessionRoutes = require('./routes/sessionRoutes')
-const questionRoutes = require('./routes/questionRoutes');
+// ---- Routes ----
+const authRoutes = require("./routes/authRoutes");
+const sessionRoutes = require("./routes/sessionRoutes");
+const questionRoutes = require("./routes/questionRoutes");
 const { protect } = require("./middlewares/authMiddleware");
-const { generateInterviewQuestions, generateConceptExplanation } = require("./controllers/aiController");
+const {
+  generateInterviewQuestions,
+  generateConceptExplanation,
+} = require("./controllers/aiController");
 
 const app = express();
-app.get('/', (req, res) => {
-  res.send('API is running...');
-});
-const cors = require("cors");
 
-const corsOptions = {
-  origin: "https://qgen-project.vercel.app", // your frontend origin (or use '*' if acceptable)
-  methods: ["GET","POST","PUT","DELETE","OPTIONS"],
-  allowedHeaders: ["Content-Type","Authorization"],
-  credentials: true,
-};
+// ---- Debug: App created ----
+console.log("✅ Express app created");
 
-app.use(cors(corsOptions));
-app.options("*", cors(corsOptions)); // ensure preflight handled
+// --------------------------------------------------
+// CORS (SINGLE, CLEAN CONFIG)
+// --------------------------------------------------
+const FRONTEND_ORIGIN = "https://qgen-project.vercel.app";
 
-// fallback: respond to OPTIONS immediately
-app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", corsOptions.origin);
-  res.header("Access-Control-Allow-Headers", corsOptions.allowedHeaders.join(", "));
-  if (req.method === "OPTIONS") {
-    res.header("Access-Control-Allow-Methods", corsOptions.methods.join(", "));
-    return res.status(200).end();
-  }
-  next();
-});
-// Middleware to handle CORS
 app.use(
   cors({
-    origin: "*",
-    methods: ["GET", "POST", "PUT", "DELETE"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    origin: FRONTEND_ORIGIN,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    credentials: true,
   })
 );
 
-connectDB()
+console.log("✅ CORS configured for:", FRONTEND_ORIGIN);
 
+// --------------------------------------------------
 // Middleware
+// --------------------------------------------------
 app.use(express.json());
 
+// Log every incoming request (VERY useful on Vercel)
+app.use((req, res, next) => {
+  console.log(`➡️  ${req.method} ${req.url}`);
+  next();
+});
+
+// --------------------------------------------------
+// MongoDB Connection (with debug + safety)
+// --------------------------------------------------
+(async () => {
+  try {
+    console.log("⏳ Attempting MongoDB connection...");
+    await connectDB();
+    console.log("✅ MongoDB connected successfully");
+  } catch (err) {
+    console.error("❌ MongoDB connection failed:");
+    console.error(err);
+  }
+})();
+
+// --------------------------------------------------
 // Routes
+// --------------------------------------------------
+app.get("/", (req, res) => {
+  res.send("API is running...");
+});
+
 app.use("/api/auth", authRoutes);
-app.use('/api/sessions', sessionRoutes);
-app.use('/api/questions', questionRoutes);
+app.use("/api/sessions", sessionRoutes);
+app.use("/api/questions", questionRoutes);
 
-app.use("/api/ai/generate-questions", protect, generateInterviewQuestions);
-app.use("/api/ai/generate-explanation", protect, generateConceptExplanation);
+app.post(
+  "/api/ai/generate-questions",
+  protect,
+  generateInterviewQuestions
+);
 
-// Serve uploads folder
-app.use("/uploads", express.static(path.join(__dirname, "uploads"), {}));
+app.post(
+  "/api/ai/generate-explanation",
+  protect,
+  generateConceptExplanation
+);
 
-// Start Server
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+// --------------------------------------------------
+// Static Files
+// --------------------------------------------------
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+
+// --------------------------------------------------
+// Global Error Handler (CRITICAL FOR DEBUGGING)
+// --------------------------------------------------
+app.use((err, req, res, next) => {
+  console.error("🔥 UNHANDLED ERROR:");
+  console.error(err.stack || err);
+
+  res.status(err.statusCode || 500).json({
+    success: false,
+    message: err.message || "Internal Server Error",
+  });
+});
+
+// --------------------------------------------------
+// IMPORTANT: DO NOT app.listen() ON VERCEL
+// --------------------------------------------------
+console.log("✅ Server setup complete (Vercel will handle execution)");
+
+module.exports = app;
