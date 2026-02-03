@@ -1,28 +1,35 @@
-// const { GoogleGenAI } = require("@google/genai");
-// const {
-//   conceptExplainPrompt,
-//   questionAnswerPrompt,
-// } = require("../utils/prompts");
-
-// const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 const { GoogleGenAI } = require("@google/genai");
-const { conceptExplainPrompt, questionAnswerPrompt } = require("../utils/prompts");
+const {
+  conceptExplainPrompt,
+  questionAnswerPrompt,
+} = require("../utils/prompts");
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+if (!process.env.GEMINI_API_KEY) {
+  console.error("❌ GEMINI_API_KEY is missing");
+}
 
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY,
+});
 
-const modelConfig = {
-  model: "gemini-2.0-flash-lite",
-  generationConfig: {
-    maxOutputTokens: 1500,  // Reduce from default 4096
-    temperature: 0.3,
-    //responseMimeType: "application/json"  // Forces JSON format
+const MODEL_NAME = "gemini-1.5-flash"; // STABLE + SAFE
+
+/* -------------------------------------------------- */
+/* Helper: Extract text safely from Gemini response   */
+/* -------------------------------------------------- */
+function extractText(response) {
+  try {
+    return response.candidates?.[0]?.content?.parts
+      ?.map((p) => p.text)
+      .join("") || "";
+  } catch {
+    return "";
   }
-};
+}
 
-// @desc    Generate interview questions and answers using Gemini
-// @route   POST /api/ai/generate-questions
-// @access  Private
+/* -------------------------------------------------- */
+/* Generate Interview Questions                       */
+/* -------------------------------------------------- */
 const generateInterviewQuestions = async (req, res) => {
   try {
     const { role, experience, topicsToFocus, numberOfQuestions } = req.body;
@@ -38,24 +45,32 @@ const generateInterviewQuestions = async (req, res) => {
       numberOfQuestions
     );
 
+    console.log("🤖 Generating interview questions...");
+
     const response = await ai.models.generateContent({
-      model: "gemini-2.0-flash-lite",
+      model: MODEL_NAME,
       contents: prompt,
     });
 
-    let rawText = response.text;
+    const text = extractText(response);
 
-    // Clean it: Remove ```json and ``` from beginning and end
-    const cleanedText = rawText
-      .replace(/^```json\s*/, "") // remove starting ```json
-      .replace(/```$/, "") // remove ending ```
-      .trim(); // remove extra spaces
+    if (!text) {
+      throw new Error("Empty response from Gemini");
+    }
 
-    // Now safe to parse
-    const data = JSON.parse(cleanedText);
+    // Try JSON parse, fallback to raw text
+    let parsed;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      console.warn("⚠️ Gemini response was not valid JSON, returning text");
+      parsed = { result: text };
+    }
 
-    res.status(200).json(data);
+    res.status(200).json(parsed);
   } catch (error) {
+    console.error("🔥 AI Questions Error:", error);
+
     res.status(500).json({
       message: "Failed to generate questions",
       error: error.message,
@@ -63,9 +78,9 @@ const generateInterviewQuestions = async (req, res) => {
   }
 };
 
-// @desc    Generate explains a interview question
-// @route   POST /api/ai/generate-explanation
-// @access  Private
+/* -------------------------------------------------- */
+/* Generate Concept Explanation                       */
+/* -------------------------------------------------- */
 const generateConceptExplanation = async (req, res) => {
   try {
     const { question } = req.body;
@@ -74,31 +89,36 @@ const generateConceptExplanation = async (req, res) => {
       return res.status(400).json({ message: "Missing required fields" });
     }
 
+    console.log("🤖 Generating concept explanation...");
+
     const prompt = conceptExplainPrompt(question);
 
     const response = await ai.models.generateContent({
-      model: "gemini-2.0-flash-lite",
+      model: MODEL_NAME,
       contents: prompt,
     });
 
-    let rawText = response.text;
+    const text = extractText(response);
 
-    // Clean it: Remove ```json and ``` from beginning and end
-    const cleanedText = rawText
-      .replace(/^```json\s*/, "") // remove starting ```json
-      .replace(/```$/, "") // remove ending ```
-      .trim(); // remove extra spaces
+    if (!text) {
+      throw new Error("Empty response from Gemini");
+    }
 
-    // Now safe to parse
-    const data = JSON.parse(cleanedText);
-
-    res.status(200).json(data);
+    // 🔥 DO NOT JSON.parse explanations
+    res.status(200).json({
+      explanation: text,
+    });
   } catch (error) {
+    console.error("🔥 AI Explanation Error:", error);
+
     res.status(500).json({
-      message: "Failed to generate questions",
+      message: "Failed to generate explanation",
       error: error.message,
     });
   }
 };
 
-module.exports = { generateInterviewQuestions, generateConceptExplanation };
+module.exports = {
+  generateInterviewQuestions,
+  generateConceptExplanation,
+};
