@@ -4,6 +4,18 @@ const cors = require("cors");
 const path = require("path");
 const connectDB = require("./config/db");
 
+
+
+const authRoutes = require('./routes/authRoutes')
+const sessionRoutes = require('./routes/sessionRoutes')
+const questionRoutes = require('./routes/questionRoutes');
+const { protect } = require("./middlewares/authMiddleware");
+const { generateInterviewQuestions, generateConceptExplanation } = require("./controllers/aiController");
+
+const app = express();
+app.get('/', (req, res) => {
+  res.send('API is running...');
+});
 const cors = require("cors");
 
 const corsOptions = {
@@ -26,18 +38,6 @@ app.use((req, res, next) => {
   }
   next();
 });
-
-const authRoutes = require('./routes/authRoutes')
-const sessionRoutes = require('./routes/sessionRoutes')
-const questionRoutes = require('./routes/questionRoutes');
-const { protect } = require("./middlewares/authMiddleware");
-const { generateInterviewQuestions, generateConceptExplanation } = require("./controllers/aiController");
-
-const app = express();
-app.get('/', (req, res) => {
-  res.send('API is running...');
-});
-
 // Middleware to handle CORS
 app.use(
   cors({
